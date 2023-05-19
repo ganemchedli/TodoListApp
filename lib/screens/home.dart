@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:todolistv2/constraints/colors.dart';
@@ -69,43 +68,26 @@ class Home extends StatelessWidget{
 }
 
 class _AddTaskAlertDialogState extends State<AddTaskAlertDialog> {
-
+  bool isWidgetVisible = true; // Initial visibility state
   @override
   Widget build(BuildContext context) {
     var width = MediaQuery.of(context).size.width;
     var height = MediaQuery.of(context).size.height;
     final TextEditingController taskNameController = TextEditingController();
     final TextEditingController taskDescController = TextEditingController();
-    String taskName0=""  ;
-    String taskDesc0 ="" ;
-    int taskId = 0 ;
 
-    @override
-    void initState()  {
-      super.initState();
-      taskNameController.addListener((){
-        if(taskNameController.text.isEmpty) {
-          taskName0 = "";
-        } else {
-          taskName0 = taskNameController.text;
-        }
-      });
-      taskDescController.addListener((){
-        if(taskDescController.text.isEmpty) {
-          taskDesc0 = "";
-        } else {
-          taskDesc0= taskDescController.text;
-        }
-      });
-    }
-    Future addTasks({required int taskId0, required String taskName0, required String taskDesc0}) async {
-      DocumentReference docRef = await FirebaseFirestore.instance.collection('tasks').add(
-        {
-          'taskDesc': taskDesc0,
-          'taskName': taskName0,
-          'taskId' : taskId0,
-        },
-      );
+
+    Future<void> addTask({required String taskName, required String taskDesc}) async {
+      try {
+      await FirebaseFirestore.instance.collection('tasks').add({
+          'taskName': taskName,
+          'taskDesc': taskDesc,
+          // Additional task properties, if any
+        });
+        print('Task added successfully');
+      } catch (e) {
+        print('Error adding task: $e');
+      }
     }
     return AlertDialog(
       scrollable: true,
@@ -122,6 +104,7 @@ class _AddTaskAlertDialogState extends State<AddTaskAlertDialog> {
             children: <Widget>[
               TextFormField(
                 style: const TextStyle(fontSize: 14),
+                controller: taskNameController,
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
@@ -135,12 +118,14 @@ class _AddTaskAlertDialogState extends State<AddTaskAlertDialog> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                 ),
+                onSaved : (String? taskNameController){},
               ),
               const SizedBox(height: 15),
               TextFormField(
                 keyboardType: TextInputType.multiline,
                 maxLines: null,
                 style: const TextStyle(fontSize: 14),
+                controller: taskDescController,
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
@@ -153,7 +138,7 @@ class _AddTaskAlertDialogState extends State<AddTaskAlertDialog> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                 ),
-                onSaved : (String? taskDescController ){},
+                onSaved : (String? taskDescController){},
               ),
               const SizedBox(height: 15),
 
@@ -163,7 +148,8 @@ class _AddTaskAlertDialogState extends State<AddTaskAlertDialog> {
       ),
       actions: [
         ElevatedButton(
-          onPressed: () {},
+          onPressed: () {
+          },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.grey,
           ),
@@ -171,10 +157,9 @@ class _AddTaskAlertDialogState extends State<AddTaskAlertDialog> {
         ),
         ElevatedButton(
           onPressed: ()  {
-            final String taskName = taskName0;
-            final String taskDesc = taskDesc0;
-            taskId += 1 ;
-            addTasks(taskId0: taskId ,taskName0: taskName, taskDesc0: taskDesc);
+            final String taskName0 = taskNameController.text;
+            final String taskDesc0 = taskDescController.text;
+            addTask(taskName: taskName0, taskDesc: taskDesc0);
           },
           child: const Text('Save'),
         ),
@@ -211,7 +196,6 @@ class _DisplayTasksState extends State<DisplayTasks>{
         stream: _usersStream,
         builder: (context, snapshot){
           return ListView(
-
             children: snapshot.data!.docs.map((DocumentSnapshot document) {
               Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
               return Container(
@@ -234,10 +218,17 @@ class _DisplayTasksState extends State<DisplayTasks>{
                   subtitle: Text(data['taskDesc']),
                   isThreeLine: true,
                   trailing: const Icon(Icons.more_vert),
-                ),
+                  onTap:() {showDialog(
+                    context: context,
+                    builder: (context) => const UpdateTaskAlertDialog(taskId: '', taskName: '', taskDesc: ''),
+                  );
+              },
+
+              ),
               );
             }).toList()
             .cast(),
+
           );
         },
       ),
@@ -245,40 +236,125 @@ class _DisplayTasksState extends State<DisplayTasks>{
 
   }
 }
-class UpdateTaskAlertDialog extends StatefulWidget{
-
-  final String  taskName, taskDesc;
-  final int taskId ;
+class UpdateTaskAlertDialog extends StatefulWidget {
+  final String taskId, taskName, taskDesc;
 
   const UpdateTaskAlertDialog(
       {Key? key, required this.taskId, required this.taskName, required this.taskDesc})
       : super(key: key);
 
   @override
-  State<UpdateTaskAlertDialog> createState()  => _UpdateTaskAlertDialogState() ;
-
+  State<UpdateTaskAlertDialog> createState() => _UpdateTaskAlertDialogState();
 }
 
 
-class _UpdateTaskAlertDialogState extends State<UpdateTaskAlertDialog>{
-  factory  _UpdateTaskAlertDialogState() => _UpdateTaskAlertDialogState() ;
-  final Stream<QuerySnapshot> _usersStream =
-  FirebaseFirestore.instance.collection('tasks').snapshots();
+class _UpdateTaskAlertDialogState extends State<UpdateTaskAlertDialog> {
+  late TextEditingController taskNameController = TextEditingController();
+  late TextEditingController taskDescController = TextEditingController();
+  String taskName = "" ;
+  String taskDesc = "" ;
+  late Map<String, dynamic> data ;
+
+  @override
+  void initState(){
+    super.initState();
+    taskNameController = TextEditingController(text : taskName) ;
+    taskDescController = TextEditingController(text: taskDesc) ;
+  }
+  factory _UpdateTaskAlertDialogState() => _UpdateTaskAlertDialogState();
+
+  void fetchTaskData(String taskId) async {
+    DocumentSnapshot taskSnapshot = await FirebaseFirestore.instance
+        .collection('tasks')
+        .doc(taskId)
+        .get();
+     data = taskSnapshot.data() as Map<String, dynamic>;
+  }
 
 
-  final TextEditingController taskNameController = TextEditingController();
-  final TextEditingController taskDescController = TextEditingController();
 
+  //taskNameController.text = widget.taskName;
+  //taskDescController.text = widget.taskDesc;
 
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuItem( //pop up menu item has two values: edit and delete
+      value: 'edit', //when value is edit, proceed to change the string values
+      child: const Text(
+        'Edit',
+        style: TextStyle(fontSize: 13.0),
+      ),
+      onTap: () {
+        String taskId = (data['taskId']);
+        String taskName = (data['taskName']);
+        String taskDesc = (data['taskDesc']);
 
+        Future.delayed(
+          const Duration(seconds: 0),
+              () =>
+              showDialog( //opens an alert dialog box with the strings already populated
+                context: context,
+                builder: (context) =>
+                    UpdateTaskAlertDialog(
+                        taskId: taskId, taskName: taskName, taskDesc: taskDesc),
+              ),
+        );
+        ElevatedButton(
+          onPressed: () {
+            final taskName = taskNameController.text;
+            final taskDesc = taskDescController.text;
+            _updateTasks(taskName, taskDesc) ;
+            Navigator.of(context, rootNavigator: true).pop();
+          },
+          child: const Text('Update'),
+        );
+
+      },
+    );
+  }
   Future _updateTasks(String taskName, String taskDesc) async {
+
+    var collection = FirebaseFirestore.instance.collection(
+        'tasks'); // fetch the collection name i.e. tasks
+    collection
+        .doc(widget.taskId ) // ensure the right task is updated by referencing the task id in the method
+        .update({
+      'taskName': taskName,
+      'taskDesc': taskDesc
+    }) // the update method will replace the values in the db, with these new values from the update alert dialog box
+        .then( // implement error handling
+          (_) =>
+          Fluttertoast.showToast(
+              msg: "Task updated successfully",
+              toastLength: Toast.LENGTH_LONG,
+              gravity: ToastGravity.SNACKBAR,
+              backgroundColor: Colors.black54,
+              textColor: Colors.white,
+              fontSize: 14.0),
+    )
+        .catchError(
+          (error) =>
+          Fluttertoast.showToast(
+              msg: "Failed: $error",
+              toastLength: Toast.LENGTH_SHORT,
+              gravity: ToastGravity.SNACKBAR,
+              backgroundColor: Colors.black54,
+              textColor: Colors.white,
+              fontSize: 14.0),
+    );
+  }
+}
+
+/*class _DeleteTaskDialogState extends State<DeleteTaskDialog>{
+
+  Future _deleteTasks() async {
     var collection = FirebaseFirestore.instance.collection('tasks'); // fetch the collection name i.e. tasks
     collection
-        .doc(widget.taskId as String?) // ensure the right task is updated by referencing the task id in the method
-        .update({'taskName': taskName, 'taskDesc': taskDesc}) // the update method will replace the values in the db, with these new values from the update alert dialog box
+        .doc(widget.taskId) // ensure the right task is deleted by passing the task id to the method
+        .delete() // delete method removes the task entry in the collection
         .then( // implement error handling
           (_) => Fluttertoast.showToast(
-          msg: "Task updated successfully",
+          msg: "Task deleted successfully",
           toastLength: Toast.LENGTH_LONG,
           gravity: ToastGravity.SNACKBAR,
           backgroundColor: Colors.black54,
@@ -295,56 +371,33 @@ class _UpdateTaskAlertDialogState extends State<UpdateTaskAlertDialog>{
           fontSize: 14.0),
     );
   }
-
-
-
-    @override
-    Widget build(BuildContext context) {
-      return PopupMenuItem<String>(
-        value: 'edit',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Edit',
-              style: TextStyle(fontSize: 13.0),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final taskName = taskNameController.text;
-                final taskDesc = taskDescController.text;
-                _updateTasks(taskName, taskDesc);
-                Navigator.of(context, rootNavigator: true).pop();
-              },
-              child: const Text('Update'),
-            ),
-               StreamBuilder<QuerySnapshot>(
-                  stream: _usersStream,
-                  builder: (context, snapshot){
-                snapshot.data!.docs.map((DocumentSnapshot document) {
-                  Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
-                  }
-                  );
-                  }
-                  ),
-          ],
-        ),
-        onTap: () {
-          int taskId = data['taskId'];
-          String taskName = data['taskName'];
-          String taskDesc = data['taskDesc'];
-
-          showDialog(
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuItem(
+      value: 'delete',
+      child: const Text(
+        'Delete',
+        style: TextStyle(fontSize: 13.0),
+      ),
+      onTap: (){
+        String taskId = (data['id']);
+        String taskName = (data['taskName']);
+        Future.delayed(
+          const Duration(seconds: 0),
+              () => showDialog(
             context: context,
-            builder: (context) =>
-                UpdateTaskAlertDialog(
-                  taskId: taskId,
-                  taskName: taskName,
-                  taskDesc: taskDesc,
-                ),
-          );
-        },
-      );
-    };
+            builder: (context) => DeleteTaskDialog(taskId: taskId, taskName:taskName),
+          ),
+        );
+      },
+    );
   }
 
+}
+class DeleteTaskDialog extends StatefulWidget{
+  const DeleteTaskDialog({super.key});
+
+  @override
+  State<DeleteTaskDialog> createState() => _DeleteTaskDialogState() ;
+}
+*/
