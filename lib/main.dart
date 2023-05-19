@@ -1,3 +1,4 @@
+import 'package:provider/provider.dart';
 import 'package:todolistv2/constraints/colors.dart';
 import 'package:todolistv2/firebase_options.dart';
 import 'package:todolistv2/screens/home.dart';
@@ -10,21 +11,22 @@ Future main() async {
   runApp(const MyApp());
 }
 
-
-
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'ToDo List',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: tdBg),
-        useMaterial3: true,
+    return ChangeNotifierProvider(
+      create: (context) => TaskProvider(),
+      child: MaterialApp(
+        title: 'ToDo List',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: tdBg),
+          useMaterial3: true,
+        ),
+        home: const Home(),
       ),
-      home: const Home(),
     );
   }
 }

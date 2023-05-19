@@ -38,7 +38,7 @@ dependencies:
   firebase_core: ^2.13.0
   cloud_firestore: ^4.7.1
   fluttertoast: ^8.2.1
-
+  provider : ^6.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
